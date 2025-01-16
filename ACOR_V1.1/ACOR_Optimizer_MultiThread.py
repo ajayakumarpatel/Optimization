@@ -19,7 +19,26 @@ import json
 import numpy as np
 import random
 import multiprocessing
+import csv
+import time
+from datetime import datetime
+
 random.seed(0)
+time_stamp = time.time()
+formatted_time = datetime.fromtimestamp(time_stamp).strftime('%H%M%S_%d%m%y')
+
+def save_archive_to_csv(archive, filename):
+    with open(filename, mode = 'w', newline='') as file:
+        writer = csv.writer(file)
+        header = ["Fitness"] + [f"Variable_{i}" for i in range(1, len(archive[0][1]) + 1)]
+        writer.writerow(header)
+
+        for solution in archive:
+            fitness = solution[0]
+            variables = solution[1]
+            row = [fitness] + variables
+            writer.writerow(row)
+
 
 class ACOR:
     def __init__(self, obj_function, search_space_json, n_ants = 20, new_ants = 2, n_cycles = 400, n_local_cycles = 5, q = 0.5, elite_count = 1, elite_weight = 0.4, evaporation_rate = 0.7, sigma = 0.5):
@@ -121,12 +140,13 @@ class ACOR:
                 new_solution.append(new_sol)
             all_new_solution.append(new_solution)
 
-        with multiprocessing.Pool(processes=8) as pool:
+        with multiprocessing.Pool(processes=m) as pool:
             new_archive = pool.map(self.evaluate_solution, all_new_solution)
 
         return new_archive
     
-    def optimizer(self):        
+    def optimizer(self):
+        filename = f"current_archive_{formatted_time}.csv"
         self.initialize_archive()
         for cycle in range(self.n_cycles):
             print(cycle, end = ' ', flush = True)
@@ -135,6 +155,8 @@ class ACOR:
             combined_solutions = self.archive + new_archive
             combined_solutions.sort(key = lambda x: x[0])
             self.archive = combined_solutions[:self.archive_size]
+            ##Save current archive
+            save_archive_to_csv(self.archive, filename)
 
         best_archive = min(self.archive, key=lambda x: x[0])
         
@@ -148,6 +170,7 @@ class ACOR:
                 combined_solutions = self.archive + new_archive
                 combined_solutions.sort(key = lambda x: x[0])
                 self.archive = combined_solutions[:self.archive_size]
+                save_archive_to_csv(self.archive, f"rebal_archive_{formatted_time}.csv")
             best_rebal = min(self.archive, key=lambda x: x[0])
 
             """Comparison current rebal solution with previous best"""
@@ -173,6 +196,7 @@ class ACOR:
 
             self.archive = self.archive + new_archive
             self.archive.sort(key = lambda x: x[0]) #sort by fitness value
+            save_archive_to_csv(self.archive, filename)
 
             """ Run Optimizer on new archive. """
             for cycle in range(self.n_cycles):
@@ -182,6 +206,7 @@ class ACOR:
                 combined_solutions = self.archive + new_archive
                 combined_solutions.sort(key = lambda x: x[0])
                 self.archive = combined_solutions[:self.archive_size]
+                save_archive_to_csv(self.archive, filename)
             best_archive = min(self.archive, key=lambda x: x[0])
             self.sigma = self.sigma*(1-((l_cycle+1)/self.n_local_cycles))
             
